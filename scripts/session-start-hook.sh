@@ -1204,9 +1204,32 @@ config_into _recovery_enabled '.features.recovery' true
 # feature flag alone: "enabled" with nothing to attempt is the same
 # user-facing case as "disabled", so both get the original wording (#745).
 _recovery_attempted=""
+# KEVIN FORK: recover an unsaved TAIL, not just an unsaved session. "Was it
+# ever saved" is the right question for the capture-gap notice and the wrong
+# one for recovery: a long session saves every cooldown window and then
+# closes, so the stretch after its last save is never summarized while
+# membership still answers "saved". Compare the recorded position against the
+# transcript's length and recover when it is behind. A SEPARATE variable on
+# purpose: PREV_WAS_SAVED feeds the capture-gap check (#270), which must keep
+# reporting "captured" for a partially saved session.
+PREV_FULLY_SAVED="$PREV_WAS_SAVED"
+if [ "$_recovery_enabled" = "true" ] && [ "$PREV_WAS_SAVED" = "yes" ] \
+   && [ -n "$PREV_JSONL" ] && [ -f "$LAST_SAVE_FILE" ] && _remember_python; then
+    PREV_SAVED_LINE=$(cd "$PIPELINE_DIR" && $PYTHON -m pipeline.shell read-position "$LAST_SAVE_FILE" "$PREV_ID" 2>/dev/null)
+    case "$PREV_SAVED_LINE" in ''|*[!0-9]*) PREV_SAVED_LINE=0 ;; esac
+    PREV_TOTAL_LINES=$(wc -l < "$PREV_JSONL" 2>/dev/null | tr -d ' ')
+    case "$PREV_TOTAL_LINES" in ''|*[!0-9]*) PREV_TOTAL_LINES=0 ;; esac
+    [ "$PREV_SAVED_LINE" -lt "$PREV_TOTAL_LINES" ] && PREV_FULLY_SAVED="no"
+fi
 if [ "$_recovery_enabled" = "true" ]; then
 if [ -d "$SESSIONS_DIR" ] && [ -f "$LAST_SAVE_FILE" ] && [ -n "$PREV_ID" ]; then
-    if [ "$PREV_WAS_SAVED" = "no" ]; then
+    # KEVIN FORK: --recover, not --force. --force ignores the global cooldown,
+    # so with several panels starting at once each start fires its own Haiku
+    # call and now.md fills with overlapping summaries. --recover still
+    # bypasses the message thresholds (a short but real closed session must
+    # save) while honoring the cooldown; a skipped session stays unsaved, so
+    # the next start outside the window retries it.
+    if [ "$PREV_FULLY_SAVED" = "no" ]; then
         # REMEMBER_TRANSCRIPT_PATH (exported above, #407) names THIS session's
         # own transcript -- it must not reach a save being forced for a
         # DIFFERENT one. pipeline.extract.find_session() trusts that variable
@@ -1216,7 +1239,7 @@ if [ -d "$SESSIONS_DIR" ] && [ -f "$LAST_SAVE_FILE" ] && [ -n "$PREV_ID" ]; then
         # saved record PREV_ID. Cleared in a subshell so it stays exported for
         # this hook's own later use. Pinned by
         # tests/test_recovery_transcript_leak_407.py.
-        ( unset REMEMBER_TRANSCRIPT_PATH; "$PLUGIN_ROOT/scripts/save-session.sh" "$PREV_ID" --force ) </dev/null >/dev/null 2>&1 & disown 2>/dev/null || true
+        ( unset REMEMBER_TRANSCRIPT_PATH; "$PLUGIN_ROOT/scripts/save-session.sh" "$PREV_ID" --recover ) </dev/null >/dev/null 2>&1 & disown 2>/dev/null || true
         # Set BEFORE we know whether the forked save-session.sh above actually
         # succeeds (#745) -- it runs detached (`& disown`, just above) and this
         # hook can exit long before it finishes, so "attempted" is the only

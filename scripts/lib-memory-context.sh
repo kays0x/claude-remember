@@ -125,7 +125,12 @@ _remember_memory_paths() {
     REMEMBER_NOW="$REMEMBER_DIR/now.md"
     REMEMBER_TODAY_FILE="$REMEMBER_DIR/today-${TODAY}.md"
 
-    MEMORY_FILES=("$IDENTITY_FILE" "$CORE_MEMORIES" "$REMEMBER_TODAY_FILE" "$REMEMBER_NOW" "$REMEMBER_RECENT" "$REMEMBER_ARCHIVE")
+    # KEVIN FORK (local preference, not for upstream): archive.md is left out
+    # of the injection list. It stays on disk and is searched on demand; older
+    # recall is covered by other tooling, and its weekly lines carry "pending"
+    # items long after they close. Rotated archives are named, not injected,
+    # upstream already, which is the behaviour this matches.
+    MEMORY_FILES=("$IDENTITY_FILE" "$CORE_MEMORIES" "$REMEMBER_TODAY_FILE" "$REMEMBER_NOW" "$REMEMBER_RECENT")
 }
 
 # _remember_render_memory_section

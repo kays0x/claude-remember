@@ -12,12 +12,14 @@
 # USAGE
 #   save-session.sh <session-id>        # normal (called by post-tool hook)
 #   save-session.sh --force             # bypass cooldown + min message threshold
-#   save-session.sh <id> --force        # recover a specific missed session
+#   save-session.sh <id> --force        # flush a specific session now
+#   save-session.sh <id> --recover      # recover missed work within global cooldown
 #   save-session.sh --dry               # preview extraction, skip Haiku call
 #
 # ARGUMENTS
 #   <session-id>   UUID of the session JSONL file (auto-detected if omitted)
 #   --force        Bypass cooldown timer and minimum human message threshold
+#   --recover      Bypass the message thresholds, but honor the cooldown timer
 #   --dry          Preview mode — show extracted exchanges, do not call Haiku
 #
 # ENVIRONMENT
@@ -251,12 +253,14 @@ trap cleanup EXIT
 # could break.
 DRY_RUN=false
 FORCE=false
+RECOVERY=false
 SESSION_ID=""
 for arg in "$@"; do
     case "$arg" in
-        --dry)   DRY_RUN=true ;;
-        --force) FORCE=true ;;
-        *)       SESSION_ID="$arg" ;;
+        --dry)     DRY_RUN=true ;;
+        --force)   FORCE=true ;;
+        --recover) RECOVERY=true ;;
+        *)         SESSION_ID="$arg" ;;
     esac
 done
 
@@ -329,6 +333,7 @@ fi
 
 # --- Cooldown ---
 [ "$FORCE" = true ] && log "force" "bypassing cooldown + min msgs"
+[ "$RECOVERY" = true ] && log "recover" "bypassing min msgs; honoring cooldown"
 if [[ ( -e "$COOLDOWN_MARKER" || -L "$COOLDOWN_MARKER" ) && "$DRY_RUN" != true && "$FORCE" != true ]]; then
     LAST_MOD=$(ts_marker_read "$COOLDOWN_MARKER")
     if [ "$LAST_MOD" = "unreadable" ]; then
@@ -551,7 +556,7 @@ MIN_EXCHANGES=$(config ".thresholds.min_exchanges_without_human" 30)
 # below (set -e + ERR trap), turning a typo into "memory silently stopped".
 case "$MIN_HUMAN" in ''|*[!0-9]*) MIN_HUMAN=3 ;; esac
 case "$MIN_EXCHANGES" in ''|*[!0-9]*) MIN_EXCHANGES=30 ;; esac
-if [ "$HUMAN_COUNT" -lt "$MIN_HUMAN" ] && [ "$DRY_RUN" = false ] && [ "$FORCE" != true ]; then
+if [ "$HUMAN_COUNT" -lt "$MIN_HUMAN" ] && [ "$DRY_RUN" = false ] && [ "$FORCE" != true ] && [ "$RECOVERY" != true ]; then
     if [ "$MIN_EXCHANGES" -gt 0 ] && [ "$EXCHANGE_COUNT" -ge "$MIN_EXCHANGES" ]; then
         log "extract" "${HUMAN_COUNT} human < ${MIN_HUMAN} but ${EXCHANGE_COUNT} exchanges >= ${MIN_EXCHANGES}, saving (agentic session)"
     else
