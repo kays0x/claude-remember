@@ -1,0 +1,14 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "kays0x",
+  "description": "Kevin's maintained fork of the remember plugin.",
+  "owner": { "name": "kays0x" },
+  "plugins": [
+    {
+      "name": "remember",
+      "description": "Continuous memory for Claude Code (kays0x fork of Digital-Process-Tools/claude-remember).",
+      "source": "./",
+      "homepage": "https://github.com/kays0x/claude-remember"
+    }
+  ]
+}
